@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern ChatGPT Interface</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="header-left">
+            <h1 id="chat-title" contenteditable="true">ChatGPT Assistant</h1>
+        </div>
+        <div class="header-right">
+          <button id="dark-mode-toggle" class="theme-toggle-btn">Toggle Dark Mode</button>
+        </div>
+    </header>
+
+    <div class="container">
+      <!-- Sidebar for Previous Conversations -->
+      <aside id="sidebar" class="sidebar" aria-label="Previous Conversations">
+          <div class="sidebar-header">
+              <h2>Conversations</h2>
+              <button id="close-sidebar-btn" class="close-sidebar-btn" aria-label="Close Sidebar">
+                  <i class="fas fa-times">x</i>
+              </button>
+          </div>
+          <ul id="conversation-list" class="conversation-list">
+              <!-- Conversations will be dynamically inserted here -->
+          </ul>
+          <button id="new-chat-btn" class="export-btn">
+              <i class="fas fa-file-export"></i> New Chat
+          </button>
+          <button id="export-chat-btn" class="export-btn">
+              <i class="fas fa-file-export"></i> Export Current Chat
+          </button>
+          <button id="regenerate-title-btn" class="export-btn">
+              <i class="fas fa-sync-alt"></i> Re-generate Title
+          </button>
+          <button id="settings-btn" class="export-btn">
+              <i class="fas fa-cog"></i> Settings
+          </button>
+      </aside>
+
+      <!-- Sidebar for Previous Conversations -->
+      <aside id="sidebarclosed" class="sidebarclosed hidden" aria-label="Closed Sidebar">
+          <div class="closed-sidebar-header">
+              <button id="open-sidebar-btn" class="open-sidebar-btn" aria-label="Close Sidebar">
+                  <i class="fas fa-times">>></i>
+              </button>
+          </div>
+      </aside>
+
+        <main>
+            <section class="chat-section">
+                <div class="chat-history" aria-label="Conversation History">
+                    <h2 class="previous-chat-title">Conversation History</h2>
+                    <!-- Messages will be dynamically inserted here -->
+                </div>
+                <div class="chat-input">
+                    <form id="chat-form" aria-label="Chat Form">
+                        <textarea id="search" name="search" placeholder="Type your message..." required aria-required="true"></textarea>
+                        <button type="submit" id="submit-btn">Send</button>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+        <div class="modal-content">
+            <span class="close-button" aria-label="Close Settings Modal">&times;</span>
+            <h2 id="settings-modal-title">Settings</h2>
+            <form id="settings-form">
+                <div class="form-group">
+                    <label for="api-url">OpenAI-Compatible API URL:</label>
+                    <input type="url" id="api-url" name="api-url" placeholder="https://api.openai.com/v1/chat/completions" required aria-required="true">
+                </div>
+                <div class="form-group">
+                    <label for="api-key">API Key (Optional):</label>
+                    <input type="password" id="api-key" name="api-key" placeholder="Enter your API key if required">
+                    <small class="warning-text">⚠️ Your API key is stored locally in your browser. Ensure your device is secure.</small>
+                </div>
+                <div class="form-group">
+                    <label for="model-input">Model Name:</label>
+                    <input type="text" id="model-input" name="model-input" placeholder="e.g., gpt-4" required aria-required="true">
+                </div>
+                <button type="submit" class="save-btn">Save Settings</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loading-indicator" class="hidden" role="status" aria-live="polite">Loading...</div>
+    <script src="script.js"></script>
+</body>
+</html>

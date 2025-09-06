@@ -16,9 +16,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const conversationList = document.getElementById("conversation-list");
     const exportChatBtn = document.getElementById("export-chat-btn");
     const regenerateTitleBtn = document.getElementById("regenerate-title-btn"); // New Button
-        // Add Dark Mode Toggle Button Listener
     const darkModeToggle = document.getElementById("dark-mode-toggle");
     const body = document.body;
+    const searchInput = document.getElementById("search");
     // Chat State
     let conversations = {}; // Object to hold multiple conversations
     let currentConversationId = null;
@@ -28,6 +28,9 @@ document.addEventListener("DOMContentLoaded", () => {
     let apiUrl = "";
     let apiKey = "";
     let selectedModel = "";
+    let chatWidth = "800"; // px
+    let chatHeight = "80"; // vh
+    let chatFontSize = "16"; // px
 
     // Prevent multiple event listener attachments
     let isEventListenerAttached = false;
@@ -48,7 +51,7 @@ document.addEventListener("DOMContentLoaded", () => {
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
 
-            const searchContent = document.getElementById("search").value.trim();
+            const searchContent = searchInput.value.trim();
 
             if (!searchContent) {
                 alert("Please enter your query.");
@@ -89,7 +92,8 @@ document.addEventListener("DOMContentLoaded", () => {
             hideLoading();
 
             // Clear the input field after submission
-            document.getElementById("search").value = "";
+            searchInput.value = "";
+            searchInput.style.height = "auto";
         });
 
         closeSidebarBtn.addEventListener("click", () => {
@@ -144,12 +148,18 @@ document.addEventListener("DOMContentLoaded", () => {
             regenerateChatTitle();
         });
 
-        // Keyboard Shortcuts (e.g., Enter to send, Shift+Enter for newline)
-        document.getElementById("search").addEventListener("keydown", function(event) {
-            if (event.key === "Enter" && !event.shiftKey) {
+        // Keyboard Shortcuts: Ctrl+Enter to send
+        searchInput.addEventListener("keydown", function(event) {
+            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
                 event.preventDefault();
                 form.dispatchEvent(new Event('submit'));
             }
+        });
+
+        // Auto-resize textarea to fit content
+        searchInput.addEventListener("input", () => {
+            searchInput.style.height = "auto";
+            searchInput.style.height = searchInput.scrollHeight + "px";
         });
 
         // Save edited chat title on blur
@@ -412,6 +422,12 @@ document.addEventListener("DOMContentLoaded", () => {
     function openSettingsModal() {
         settingsModal.classList.remove("hidden");
         // Focus on the first input for accessibility
+        document.getElementById("api-url").value = apiUrl;
+        document.getElementById("api-key").value = apiKey;
+        document.getElementById("model-input").value = selectedModel;
+        document.getElementById("chat-width").value = chatWidth;
+        document.getElementById("chat-height").value = chatHeight;
+        document.getElementById("chat-font-size").value = chatFontSize;
         document.getElementById("api-url").focus();
     }
 
@@ -429,6 +445,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const apiUrlInput = document.getElementById("api-url").value.trim();
         const apiKeyInput = document.getElementById("api-key").value.trim();
         const modelInput = document.getElementById("model-input").value.trim();
+        const chatWidthInput = document.getElementById("chat-width").value.trim();
+        const chatHeightInput = document.getElementById("chat-height").value.trim();
+        const chatFontSizeInput = document.getElementById("chat-font-size").value.trim();
 
         if (!apiUrlInput) {
             alert("API URL is required.");
@@ -443,11 +462,19 @@ document.addEventListener("DOMContentLoaded", () => {
         apiUrl = apiUrlInput;
         apiKey = apiKeyInput;
         selectedModel = modelInput;
+        chatWidth = chatWidthInput || chatWidth;
+        chatHeight = chatHeightInput || chatHeight;
+        chatFontSize = chatFontSizeInput || chatFontSize;
 
         // Save settings to localStorage
         localStorage.setItem("apiUrl", apiUrl);
         localStorage.setItem("apiKey", apiKey);
         localStorage.setItem("selectedModel", selectedModel);
+        localStorage.setItem("chatWidth", chatWidth);
+        localStorage.setItem("chatHeight", chatHeight);
+        localStorage.setItem("chatFontSize", chatFontSize);
+
+        applyChatSettings();
 
         // Save chat title if edited
         const editedTitle = chatTitleElement.textContent.trim();
@@ -462,12 +489,25 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     /**
+     * Applies chat appearance settings to the document.
+     */
+    function applyChatSettings() {
+        document.documentElement.style.setProperty('--chat-max-width', `${chatWidth}px`);
+        document.documentElement.style.setProperty('--chat-height', `${chatHeight}vh`);
+        document.documentElement.style.setProperty('--chat-font-size', `${chatFontSize}px`);
+    }
+
+    /**
      * Loads settings from localStorage.
      */
     function loadSettings() {
         apiUrl = localStorage.getItem("apiUrl") || "";
         apiKey = localStorage.getItem("apiKey") || "";
         selectedModel = localStorage.getItem("selectedModel") || "";
+        chatWidth = localStorage.getItem("chatWidth") || chatWidth;
+        chatHeight = localStorage.getItem("chatHeight") || chatHeight;
+        chatFontSize = localStorage.getItem("chatFontSize") || chatFontSize;
+        applyChatSettings();
         const savedTitle = localStorage.getItem("chatTitle") || "";
 
         if (savedTitle && savedTitle !== "ChatGPT Assistant") {

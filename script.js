@@ -217,8 +217,9 @@ document.addEventListener("DOMContentLoaded", () => {
             // Message content
             const messageContent = document.createElement("div");
             messageContent.classList.add("message-content");
+            const formattedContent = sanitizeHTML(msg.content).replace(/\n/g, "<br>");
             messageContent.innerHTML = `
-                <strong>${capitalizeFirstLetter(msg.role)}:</strong> ${sanitizeHTML(msg.content)}
+                <strong>${capitalizeFirstLetter(msg.role)}:</strong> ${formattedContent}
                 <span class="timestamp">${new Date().toLocaleTimeString()}</span>
             `;
             messageElement.appendChild(messageContent);

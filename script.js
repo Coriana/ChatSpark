@@ -51,7 +51,7 @@ document.addEventListener("DOMContentLoaded", () => {
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
 
-            const searchContent = searchInput.value.replace(/\s+$/, "");
+            const searchContent = searchInput.value.trim();
 
             if (!searchContent) {
                 alert("Please enter your query.");

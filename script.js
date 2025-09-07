@@ -406,7 +406,16 @@ document.addEventListener("DOMContentLoaded", () => {
     async function promptForChatTitle() {
         if (!activeModel) return;
 
-        const titlePrompt = "Give a VERY short title for this conversation. Do not give explanations or preamble, just give the title and nothing else.";
+        const titlePrompt = `Generate a single, specific title for this chat from the existing conversation context.
+
+Rules:
+- ≤8 words and ≤60 characters
+- Title Case (capitalize principal words)
+- No emojis, quotes, brackets, hashtags, markdown, or code fences
+- No trailing punctuation
+- Avoid generic titles like "Chat", "Conversation", "General", "Discussion"
+
+Return ONLY the title text with nothing else.`;
 
         try {
             const botTitle = await fetchBotResponse(titlePrompt, conversations[currentConversationId].messages);
@@ -880,7 +889,16 @@ document.addEventListener("DOMContentLoaded", () => {
         // Show loading indicator
         showLoading();
 
-        const titlePrompt = "Please suggest a new suitable title for this conversation based on its content.";
+        const titlePrompt = `Generate a single, specific title for this chat from the existing conversation context.
+
+Rules:
+- ≤8 words and ≤60 characters
+- Title Case (capitalize principal words)
+- No emojis, quotes, brackets, hashtags, markdown, or code fences
+- No trailing punctuation
+- Avoid generic titles like "Chat", "Conversation", "General", "Discussion"
+
+Return ONLY the title text with nothing else.`;
 
         try {
             const botTitle = await fetchBotResponse(titlePrompt, getCurrentConversationMessages());

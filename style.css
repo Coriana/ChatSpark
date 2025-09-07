@@ -1,41 +1,34 @@
 /* Reset and base styles */
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;700&display=swap');
+
 * {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
 }
 
+:root {
+    --chat-max-width: 800px;
+    --chat-height: 80vh;
+    --chat-font-size: 16px;
+    --color-primary: #4a90e2;
+    --color-primary-hover: #357ab7;
+    --color-background: #f5f7fa;
+    --color-user-bg: var(--color-primary);
+    --color-assistant-bg: #e1e1e1;
+}
+
 body {
-    font-family: 'ComicMono', sans-serif;
-    background-color: #f5f7fa;
+    font-family: 'Inter', sans-serif;
+    background-color: var(--color-background);
     display: flex;
     flex-direction: column;
     min-height: 100vh;
 }
 
-:root {
-    --chat-max-width: 800px;
-    --chat-height: 80vh;
-    --chat-font-size: 16px;
-}
-
-/* Add font-face rule for local fonts */
-@font-face {
-    font-family: 'ComicMono';
-    src: url('files/ComicMono.ttf') format('truetype');
-    font-weight: normal;
-}
-
-@font-face {
-    font-family: 'ComicMono';
-    src: url('files/ComicMono-bold.ttf') format('truetype');
-    font-weight: bold;
-}
-
-/* Rest of the styles remain unchanged */
 /* Header Styles */
 header {
-    background-color: #4a90e2;
+    background-color: var(--color-primary);
     color: #fff;
     padding: 1rem 2rem;
     display: flex;
@@ -45,7 +38,6 @@ header {
 
 header h1 {
     font-size: 1.5rem;
-    border-bottom: 1px dashed #4a90e2;
     padding-bottom: 0.25rem;
 }
 
@@ -55,7 +47,7 @@ header h1[contenteditable="true"] {
 
 header .header-right button {
     background-color: #fff;
-    color: #4a90e2;
+    color: var(--color-primary);
     border: none;
     padding: 0.5rem 1rem;
     margin-left: 0.5rem;
@@ -69,7 +61,7 @@ header .header-right button {
 }
 
 header .header-right button:hover {
-    background-color: #357ab7;
+    background-color: var(--color-primary-hover);
     color: #fff;
 }
 
@@ -299,17 +291,55 @@ main {
     line-height: 1.4;
     white-space: pre-wrap;
     position: relative;
-    border-radius: 12px;
+    border-radius: 16px;
     display: flex;
     flex-direction: column;
-    background-color: #e1e1e1;
+    background-color: var(--color-assistant-bg);
     color: #333;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
 .message.user .message-content {
-    background-color: #4a90e2;
+    background-color: var(--color-user-bg);
     color: #fff;
-    border-radius: 12px 12px 0 12px;
+    border-radius: 16px 16px 0 16px;
+}
+
+.message.assistant .message-content {
+    border-radius: 16px 16px 16px 0;
+}
+
+.message-content pre {
+    background-color: #f6f8fa;
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-top: 0.5rem;
+    overflow-x: auto;
+    font-family: 'Fira Code', monospace;
+    position: relative;
+}
+
+.message-content pre code {
+    display: block;
+}
+
+.copy-code-btn {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.25rem;
+    background-color: var(--color-primary);
+    color: #fff;
+    border: none;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.message-content pre:hover .copy-code-btn {
+    opacity: 1;
 }
 
 .message-actions {
@@ -512,6 +542,14 @@ body.dark-mode .message.user .message-content {
 body.dark-mode .message.assistant .message-content {
     background-color: #444444;
     color: #ffffff;
+}
+
+body.dark-mode .message-content pre {
+    background-color: #2d2d2d;
+}
+
+body.dark-mode .copy-code-btn {
+    background-color: var(--color-primary);
 }
 
 body.dark-mode .theme-toggle-btn {

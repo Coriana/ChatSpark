@@ -85,7 +85,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 // After the first user message and assistant response, prompt for chat title
                 // Ensure this only happens once
                 if (!chatTitleSet && getCurrentConversationMessages().length === 2) { // Only first interaction
-                    await promptForChatTitle();
+                    // Queue title generation without blocking user input
+                    promptForChatTitle();
                 }
             } catch (error) {
                 console.error("Fetch Error:", error);

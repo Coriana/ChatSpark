@@ -19,6 +19,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const darkModeToggle = document.getElementById("dark-mode-toggle");
     const body = document.body;
     const searchInput = document.getElementById("search");
+    const submitBtn = document.getElementById("submit-btn");
     const modelSelect = document.getElementById("model-select");
     const newModelNameInput = document.getElementById("new-model-name");
     const newModelUrlInput = document.getElementById("new-model-url");
@@ -66,6 +67,12 @@ document.addEventListener("DOMContentLoaded", () => {
             updateChatHistory();
             scrollToBottom();
 
+            // Clear the input and disable input while waiting for reply
+            searchInput.value = "";
+            searchInput.style.height = "auto";
+            searchInput.disabled = true;
+            submitBtn.disabled = true;
+
             // Show loading indicator
             showLoading();
 
@@ -90,14 +97,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 updateChatHistory();
                 scrollToBottom();
+            } finally {
+                // Hide loading indicator and re-enable input
+                hideLoading();
+                searchInput.disabled = false;
+                submitBtn.disabled = false;
+                searchInput.focus();
             }
-
-            // Hide loading indicator
-            hideLoading();
-
-            // Clear the input field after submission
-            searchInput.value = "";
-            searchInput.style.height = "auto";
         });
 
         closeSidebarBtn.addEventListener("click", () => {

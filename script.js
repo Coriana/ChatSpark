@@ -51,8 +51,8 @@ document.addEventListener("DOMContentLoaded", () => {
         form.addEventListener("submit", async (event) => {
             event.preventDefault();
 
-            const searchContent = searchInput.value.trim();
-
+            const searchContent = searchInput.value.replace(/\s+$/, "");
+            
             if (!searchContent) {
                 alert("Please enter your query.");
                 return;
@@ -859,3 +859,4 @@ document.addEventListener("DOMContentLoaded", () => {
         hideLoading();
     }
 });
+

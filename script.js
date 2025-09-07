@@ -233,12 +233,16 @@ document.addEventListener("DOMContentLoaded", () => {
             // Message content
             const messageContent = document.createElement("div");
             messageContent.classList.add("message-content");
-            const formattedContent = sanitizeHTML(msg.content).replace(/\n/g, "<br>");
+            const formattedContent = sanitizeHTML(msg.content)
+                .replace(/```([\s\S]*?)```/g, (match, code) => `<pre><code>${code.replace(/\n/g, '\u0000')}</code></pre>`) 
+                .replace(/\n/g, "<br>")
+                .replace(/\u0000/g, '\n');
             messageContent.innerHTML = `
                 <strong>${capitalizeFirstLetter(msg.role)}:</strong> ${formattedContent}
                 <span class="timestamp">${new Date().toLocaleTimeString()}</span>
             `;
             messageElement.appendChild(messageContent);
+            addCopyButtonsToCodeBlocks(messageContent);
 
             // Action buttons
             if (msg.role.toLowerCase() === "user" || msg.role.toLowerCase() === "assistant") {
@@ -266,6 +270,25 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             chatHistory.appendChild(messageElement);
+        });
+    }
+
+    /**
+     * Adds copy buttons to code blocks within a message.
+     * @param {HTMLElement} container - The message content container.
+     */
+    function addCopyButtonsToCodeBlocks(container) {
+        const blocks = container.querySelectorAll('pre');
+        blocks.forEach(block => {
+            const button = document.createElement('button');
+            button.classList.add('copy-code-btn');
+            button.textContent = 'Copy';
+            button.addEventListener('click', () => {
+                navigator.clipboard.writeText(block.innerText);
+                button.textContent = 'Copied!';
+                setTimeout(() => (button.textContent = 'Copy'), 2000);
+            });
+            block.appendChild(button);
         });
     }
 

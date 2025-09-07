@@ -19,15 +19,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const darkModeToggle = document.getElementById("dark-mode-toggle");
     const body = document.body;
     const searchInput = document.getElementById("search");
+    const modelSelect = document.getElementById("model-select");
+    const newModelNameInput = document.getElementById("new-model-name");
+    const newModelUrlInput = document.getElementById("new-model-url");
+    const newModelKeyInput = document.getElementById("new-model-key");
+    const addModelBtn = document.getElementById("add-model-btn");
     // Chat State
     let conversations = {}; // Object to hold multiple conversations
     let currentConversationId = null;
     let chatTitleSet = false; // Flag to track if title has been set
 
     // Settings State
-    let apiUrl = "";
-    let apiKey = "";
-    let selectedModel = "";
+    let models = [];
+    let activeModel = null;
     let chatWidth = "800"; // px
     let chatHeight = "80"; // vh
     let chatFontSize = "16"; // px
@@ -134,6 +138,18 @@ document.addEventListener("DOMContentLoaded", () => {
             saveSettings();
             closeSettingsModal();
             alert("Settings saved successfully!");
+        });
+
+        modelSelect.addEventListener("change", () => {
+            const selectedName = modelSelect.value;
+            activeModel = models.find(m => m.name === selectedName) || null;
+            if (activeModel) {
+                localStorage.setItem("activeModel", activeModel.name);
+            }
+        });
+
+        addModelBtn.addEventListener("click", () => {
+            addModel();
         });
 
         newChatBtn.addEventListener("click", () => {
@@ -344,7 +360,7 @@ document.addEventListener("DOMContentLoaded", () => {
      * @returns {Promise<string>} - The assistant's response
      */
     async function fetchBotResponse(userInput, priorConversation = []) {
-        if (!apiUrl) {
+        if (!activeModel || !activeModel.apiUrl) {
             throw new Error("API URL is not set.");
         }
 
@@ -355,7 +371,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         const payload = {
-            model: selectedModel || "gpt-4",
+            model: activeModel.name || "gpt-4",
             messages: [
                 ...priorConversation.map(msg => ({ role: msg.role.toLowerCase(), content: msg.content })),
                 { role: "user", content: userInput }
@@ -363,11 +379,11 @@ document.addEventListener("DOMContentLoaded", () => {
             max_tokens: 2000,
         };
 
-        const response = await fetch(apiUrl, {
+        const response = await fetch(activeModel.apiUrl, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                ...(apiKey && { "Authorization": `Bearer ${apiKey}` }),
+                ...(activeModel.apiKey && { "Authorization": `Bearer ${activeModel.apiKey}` }),
             },
             body: JSON.stringify(payload),
         });
@@ -388,7 +404,7 @@ document.addEventListener("DOMContentLoaded", () => {
      * Prompts the assistant to suggest a chat title based on the first user message.
      */
     async function promptForChatTitle() {
-        if (!apiUrl) return;
+        if (!activeModel) return;
 
         const titlePrompt = "Give a VERY short title for this conversation. Do not give explanations or preamble, just give the title and nothing else.";
 
@@ -422,14 +438,11 @@ document.addEventListener("DOMContentLoaded", () => {
      */
     function openSettingsModal() {
         settingsModal.classList.remove("hidden");
-        // Focus on the first input for accessibility
-        document.getElementById("api-url").value = apiUrl;
-        document.getElementById("api-key").value = apiKey;
-        document.getElementById("model-input").value = selectedModel;
+        populateModelSelect();
         document.getElementById("chat-width").value = chatWidth;
         document.getElementById("chat-height").value = chatHeight;
         document.getElementById("chat-font-size").value = chatFontSize;
-        document.getElementById("api-url").focus();
+        modelSelect.focus();
     }
 
     /**
@@ -440,37 +453,64 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     /**
+     * Adds a new model and updates the dropdown.
+     */
+    function addModel() {
+        const name = newModelNameInput.value.trim();
+        const apiUrl = newModelUrlInput.value.trim();
+        const apiKey = newModelKeyInput.value.trim();
+
+        if (!name || !apiUrl) {
+            alert("Model name and API URL are required.");
+            return;
+        }
+
+        if (models.some(m => m.name === name)) {
+            alert("Model name already exists.");
+            return;
+        }
+
+        const model = { name, apiUrl, apiKey };
+        models.push(model);
+        activeModel = model;
+        localStorage.setItem("models", JSON.stringify(models));
+        localStorage.setItem("activeModel", model.name);
+        populateModelSelect();
+        modelSelect.value = model.name;
+        newModelNameInput.value = "";
+        newModelUrlInput.value = "";
+        newModelKeyInput.value = "";
+    }
+
+    /**
+     * Populates the model dropdown from saved models.
+     */
+    function populateModelSelect() {
+        modelSelect.innerHTML = "";
+        models.forEach(model => {
+            const option = document.createElement("option");
+            option.value = model.name;
+            option.textContent = model.name;
+            modelSelect.appendChild(option);
+        });
+        if (activeModel) {
+            modelSelect.value = activeModel.name;
+        }
+    }
+
+    /**
      * Saves settings from the settings form to localStorage.
      */
     function saveSettings() {
-        const apiUrlInput = document.getElementById("api-url").value.trim();
-        const apiKeyInput = document.getElementById("api-key").value.trim();
-        const modelInput = document.getElementById("model-input").value.trim();
         const chatWidthInput = document.getElementById("chat-width").value.trim();
         const chatHeightInput = document.getElementById("chat-height").value.trim();
         const chatFontSizeInput = document.getElementById("chat-font-size").value.trim();
 
-        if (!apiUrlInput) {
-            alert("API URL is required.");
-            return;
-        }
-
-        if (!modelInput) {
-            alert("Model name is required.");
-            return;
-        }
-
-        apiUrl = apiUrlInput;
-        apiKey = apiKeyInput;
-        selectedModel = modelInput;
         chatWidth = chatWidthInput || chatWidth;
         chatHeight = chatHeightInput || chatHeight;
         chatFontSize = chatFontSizeInput || chatFontSize;
 
         // Save settings to localStorage
-        localStorage.setItem("apiUrl", apiUrl);
-        localStorage.setItem("apiKey", apiKey);
-        localStorage.setItem("selectedModel", selectedModel);
         localStorage.setItem("chatWidth", chatWidth);
         localStorage.setItem("chatHeight", chatHeight);
         localStorage.setItem("chatFontSize", chatFontSize);
@@ -502,9 +542,12 @@ document.addEventListener("DOMContentLoaded", () => {
      * Loads settings from localStorage.
      */
     function loadSettings() {
-        apiUrl = localStorage.getItem("apiUrl") || "";
-        apiKey = localStorage.getItem("apiKey") || "";
-        selectedModel = localStorage.getItem("selectedModel") || "";
+        models = JSON.parse(localStorage.getItem("models")) || [];
+        const activeName = localStorage.getItem("activeModel");
+        activeModel = models.find(m => m.name === activeName) || models[0] || null;
+        if (activeModel) {
+            localStorage.setItem("activeModel", activeModel.name);
+        }
         chatWidth = localStorage.getItem("chatWidth") || chatWidth;
         chatHeight = localStorage.getItem("chatHeight") || chatHeight;
         chatFontSize = localStorage.getItem("chatFontSize") || chatFontSize;
@@ -516,8 +559,8 @@ document.addEventListener("DOMContentLoaded", () => {
             chatTitleSet = true; // Assume title is already set
         }
 
-        if (!apiUrl || !selectedModel) {
-            // If settings are not saved, prompt the user to open the settings modal
+        if (!activeModel) {
+            // If no model is configured, prompt the user to open the settings modal
             openSettingsModal();
         }
     }

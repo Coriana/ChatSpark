@@ -406,7 +406,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 ...priorConversation.map(msg => ({ role: msg.role.toLowerCase(), content: msg.content })),
                 { role: "user", content: userInput }
             ],
-            max_tokens: 2000,
         };
 
         const response = await fetch(activeModel.apiUrl, {

@@ -25,10 +25,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const newModelUrlInput = document.getElementById("new-model-url");
     const newModelKeyInput = document.getElementById("new-model-key");
     const addModelBtn = document.getElementById("add-model-btn");
+    const folderList = document.getElementById("folder-list"); // Folder list element
+
     // Chat State
     let conversations = {}; // Object to hold multiple conversations
     let currentConversationId = null;
     let chatTitleSet = false; // Flag to track if title has been set
+    let folders = {}; // Object to hold folders
+    let currentFolderId = null; // Currently selected folder
 
     // Settings State
     let models = [];
@@ -43,6 +47,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Initialize Conversations
     loadConversations();
     loadSettings();
+    loadFolders();
+    updateFolderListUI();
     loadCurrentConversation();
 
     // Attach Event Listeners Only Once
@@ -111,6 +117,10 @@ document.addEventListener("DOMContentLoaded", () => {
             toggleSidebarVisibility();
         });
 
+        // Create folder button event listener
+        document.getElementById("create-folder-btn")?.addEventListener("click", () => {
+            createNewFolder();
+        });
 
         // Check for saved dark mode preference in local storage and apply it
         if (localStorage.getItem("darkMode") === "enabled") {
@@ -194,6 +204,207 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 chatTitleElement.textContent = "ChatGPT Assistant";
                 chatTitleSet = false;
+            }
+        });
+    }
+
+    /**
+     * Creates a new folder
+     */
+    function createNewFolder() {
+        const folderName = prompt("Enter folder name:", "New Folder");
+        if (folderName && folderName.trim()) {
+            const folderId = 'folder_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            folders[folderId] = {
+                id: folderId,
+                name: folderName.trim(),
+                conversations: []
+            };
+            currentFolderId = folderId;
+            saveFolders();
+            updateFolderListUI();
+            updateConversationListUI();
+        }
+    }
+
+    /**
+     * Saves folders to localStorage
+     */
+    function saveFolders() {
+        localStorage.setItem("folders", JSON.stringify(folders));
+        localStorage.setItem("currentFolderId", currentFolderId);
+    }
+
+    /**
+     * Loads folders from localStorage
+     */
+    function loadFolders() {
+        const savedFolders = JSON.parse(localStorage.getItem("folders"));
+        if (savedFolders && typeof savedFolders === "object") {
+            folders = savedFolders;
+        }
+        
+        currentFolderId = localStorage.getItem("currentFolderId");
+        // If the stored folder doesn't exist, set to null
+        if (currentFolderId && !folders[currentFolderId]) {
+            currentFolderId = null;
+        }
+    }
+
+    /**
+     * Updates the UI list of folders in the sidebar
+     */
+    function updateFolderListUI() {
+        const folderList = document.getElementById("folder-list");
+        if (!folderList) return; // Guard clause in case element doesn't exist
+        
+        folderList.innerHTML = "";
+        
+        // Add "All Conversations" option
+        const allConversationsLi = document.createElement("li");
+        allConversationsLi.classList.add("folder-item");
+        if (currentFolderId === null) {
+            allConversationsLi.classList.add("active");
+        }
+        allConversationsLi.innerHTML = `<span>All Conversations</span>`;
+        
+        allConversationsLi.addEventListener("click", () => {
+            currentFolderId = null;
+            saveFolders();
+            updateFolderListUI();
+            updateConversationListUI();
+        });
+        
+        folderList.appendChild(allConversationsLi);
+        
+        // Add all folders
+        Object.keys(folders).forEach(folderId => {
+            const folder = folders[folderId];
+            const li = document.createElement("li");
+            li.classList.add("folder-item");
+            if (folderId === currentFolderId) {
+                li.classList.add("active");
+            }
+            
+            li.innerHTML = `
+                <span>${sanitizeHTML(folder.name)}</span>
+                <div class="folder-actions">
+                    <button class="rename-folder-btn" title="Rename Folder">✏️</button>
+                    <button class="delete-folder-btn" title="Delete Folder">🗑️</button>
+                </div>
+            `;
+            
+            // Event listener for selecting a folder
+            li.querySelector("span").addEventListener("click", () => {
+                currentFolderId = folderId;
+                saveFolders();
+                updateFolderListUI();
+                updateConversationListUI();
+            });
+            
+            // Event listener for renaming a folder
+            li.querySelector(".rename-folder-btn").addEventListener("click", (e) => {
+                e.stopPropagation();
+                const newName = prompt("Enter new folder name:", folder.name);
+                if (newName && newName.trim()) {
+                    folders[folderId].name = newName.trim();
+                    saveFolders();
+                    updateFolderListUI();
+                }
+            });
+            
+            // Event listener for deleting a folder
+            li.querySelector(".delete-folder-btn").addEventListener("click", (e) => {
+                e.stopPropagation();
+                if (confirm(`Are you sure you want to delete the folder "${folder.name}"?`)) {
+                    delete folders[folderId];
+                    if (folderId === currentFolderId) {
+                        currentFolderId = null;
+                    }
+                    saveFolders();
+                    updateFolderListUI();
+                    updateConversationListUI();
+                }
+            });
+            
+            folderList.appendChild(li);
+        });
+    }
+
+    /**
+     * Shows folder assignment menu for a conversation
+     * @param {string} conversationId - The ID of the conversation to move
+     * @param {HTMLElement} element - The element that triggered the menu
+     */
+    function showFolderAssignmentMenu(conversationId, element) {
+        // Remove any existing menus
+        const existingMenu = document.querySelector('.folder-menu');
+        if (existingMenu) existingMenu.remove();
+        
+        // Create menu container
+        const menu = document.createElement('div');
+        menu.className = 'folder-menu';
+        
+        // Add "No Folder" option
+        const noFolderOption = document.createElement('div');
+        noFolderOption.className = 'folder-menu-item';
+        noFolderOption.textContent = 'No Folder';
+        noFolderOption.addEventListener('click', () => {
+            // Remove from all folders
+            Object.values(folders).forEach(folder => {
+                const index = folder.conversations.indexOf(conversationId);
+                if (index !== -1) {
+                    folder.conversations.splice(index, 1);
+                }
+            });
+            saveFolders();
+            updateConversationListUI();
+            menu.remove();
+        });
+        menu.appendChild(noFolderOption);
+        
+        // Add all folders as options
+        Object.keys(folders).forEach(folderId => {
+            const folder = folders[folderId];
+            const option = document.createElement('div');
+            option.className = 'folder-menu-item';
+            option.textContent = folder.name;
+            
+            // Highlight if conversation is already in this folder
+            if (folder.conversations.includes(conversationId)) {
+                option.classList.add('selected');
+            }
+            
+            option.addEventListener('click', () => {
+                // First, remove from all folders
+                Object.values(folders).forEach(f => {
+                    const index = f.conversations.indexOf(conversationId);
+                    if (index !== -1) {
+                        f.conversations.splice(index, 1);
+                    }
+                });
+                
+                // Add to selected folder
+                folders[folderId].conversations.push(conversationId);
+                saveFolders();
+                updateConversationListUI();
+                menu.remove();
+            });
+            
+            menu.appendChild(option);
+        });
+        
+        // Position and show menu
+        document.body.appendChild(menu);
+        const rect = element.getBoundingClientRect();
+        menu.style.top = `${rect.bottom}px`;
+        menu.style.left = `${rect.left}px`;
+        
+        // Close menu when clicking outside
+        document.addEventListener('click', function closeMenu(e) {
+            if (!menu.contains(e.target) && e.target !== element) {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
             }
         });
     }
@@ -649,7 +860,14 @@ Return ONLY the title text with nothing else.`;
         };
         currentConversationId = newId;
         chatTitleElement.textContent = defaultTitle;
-        chatTitleSet = false;
+        chatTitleSet = false;     
+		
+        // Add the new conversation to the current folder if one is selected
+        if (currentFolderId && folders[currentFolderId]) {
+            folders[currentFolderId].conversations.push(newId);
+            saveFolders();
+        }
+        
         saveConversations();
         updateConversationListUI();
     }
@@ -708,19 +926,28 @@ Return ONLY the title text with nothing else.`;
     function updateConversationListUI() {
         conversationList.innerHTML = "";
         
-        // Get conversation IDs and sort them by timestamp (newest first)
+        // Get conversation IDs
         const conversationIds = Object.keys(conversations);
-        conversationIds.sort((a, b) => {
+        
+        // Filter conversations if a folder is selected
+        const filteredIds = currentFolderId 
+            ? folders[currentFolderId].conversations
+            : conversationIds;
+        
+        // Sort by timestamp (newest first)
+        filteredIds.sort((a, b) => {
             // Extract timestamp from conversation ID format 'conv_[timestamp]_[random]'
             const getTimestamp = id => {
                 const match = id.match(/conv_(\d+)_/);
                 return match ? parseInt(match[1]) : 0;
             };
-            return getTimestamp(b) - getTimestamp(a); // Descending order (newest first)
+            return getTimestamp(b) - getTimestamp(a); // Descending order
         });
         
-        // Iterate through the sorted IDs to display conversations
-        for (const id of conversationIds) {
+        // Add conversations to the UI
+        for (const id of filteredIds) {
+            if (!conversations[id]) continue; // Skip if conversation doesn't exist
+            
             const convo = conversations[id];
             const li = document.createElement("li");
             li.classList.add("conversation-item");
@@ -731,6 +958,7 @@ Return ONLY the title text with nothing else.`;
             li.innerHTML = `
                 <span>${sanitizeHTML(convo.title)}</span>
                 <div class="conversation-actions">
+                    <button class="folder-assign-btn" title="Move to Folder">📂</button>
                     <button class="rename-btn" title="Rename Conversation">✏️</button>
                     <button class="delete-btn" title="Delete Conversation">🗑️</button>
                 </div>
@@ -746,6 +974,12 @@ Return ONLY the title text with nothing else.`;
                     updateConversationListUI();
                 }
             });
+            
+            // Event listener for assigning to folder
+            li.querySelector(".folder-assign-btn").addEventListener("click", (e) => {
+                e.stopPropagation();
+                showFolderAssignmentMenu(id, e.target);
+            });
 
             // Event listener for renaming a conversation
             li.querySelector(".rename-btn").addEventListener("click", () => {
@@ -758,6 +992,14 @@ Return ONLY the title text with nothing else.`;
             // Event listener for deleting a conversation
             li.querySelector(".delete-btn").addEventListener("click", () => {
                 if (confirm(`Are you sure you want to delete the conversation "${convo.title}"?`)) {
+                    // Remove conversation from any folder
+                    Object.values(folders).forEach(folder => {
+                        const index = folder.conversations.indexOf(id);
+                        if (index !== -1) {
+                            folder.conversations.splice(index, 1);
+                        }
+                    });
+                    
                     delete conversations[id];
                     // If the deleted conversation was current, load another
                     if (id === currentConversationId) {
@@ -771,6 +1013,7 @@ Return ONLY the title text with nothing else.`;
                         }
                     }
                     saveConversations();
+                    saveFolders();
                     updateConversationListUI();
                 }
             });

@@ -707,7 +707,20 @@ Return ONLY the title text with nothing else.`;
      */
     function updateConversationListUI() {
         conversationList.innerHTML = "";
-        for (const id in conversations) {
+        
+        // Get conversation IDs and sort them by timestamp (newest first)
+        const conversationIds = Object.keys(conversations);
+        conversationIds.sort((a, b) => {
+            // Extract timestamp from conversation ID format 'conv_[timestamp]_[random]'
+            const getTimestamp = id => {
+                const match = id.match(/conv_(\d+)_/);
+                return match ? parseInt(match[1]) : 0;
+            };
+            return getTimestamp(b) - getTimestamp(a); // Descending order (newest first)
+        });
+        
+        // Iterate through the sorted IDs to display conversations
+        for (const id of conversationIds) {
             const convo = conversations[id];
             const li = document.createElement("li");
             li.classList.add("conversation-item");

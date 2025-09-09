@@ -55,9 +55,19 @@ header .header-right button {
     cursor: pointer;
     font-weight: 500;
     transition: background-color 0.3s, color 0.3s;
-    display: flex;
+    display: inline-flex; /* Changed from flex to inline-flex */
     align-items: center;
+    justify-content: center; /* Added to center the content */
     gap: 0.5rem;
+}
+
+/* Add specific styling for the settings button if needed */
+#settings-btn {
+    white-space: nowrap; /* Prevents line breaks */
+    background-color: #fff;
+    border: 1px solid var(--color-primary);
+    border-radius: 4px;
+    padding: 0.5rem;
 }
 
 header .header-right button:hover {
@@ -67,6 +77,12 @@ header .header-right button:hover {
 
 header .header-right button i {
     font-size: 1rem;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px; /* Adjust spacing as needed */
 }
 
 /* Container to hold sidebar and main content */
@@ -735,5 +751,16 @@ footer {
 
 .dark-mode .folder-menu-item.selected {
     background-color: #444;
+}
+
+/* Sidebar actions */
+.sidebar-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 1rem;
+}
+
+.sidebar-actions .export-btn {
+    flex: 1; /* Make buttons take equal width */
 }
 

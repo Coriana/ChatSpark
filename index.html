@@ -3,16 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modern ChatGPT Interface</title>
+    <title>Local Chat Interface</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <header>
         <div class="header-left">
-            <h1 id="chat-title" contenteditable="true">ChatGPT Assistant</h1>
+            <button id="regenerate-title-btn" class="export-btn" title="Re-generate Title"> 
+            ♻️</button>
+            <h1 id="chat-title" contenteditable="true">Local Chat Interface</h1>
         </div>
         <div class="header-right">
           <button id="dark-mode-toggle" class="theme-toggle-btn">Toggle Dark Mode</button>
+          <button id="settings-btn" class="export-btn" title="Settings">⚙️ </button>
         </div>
     </header>
 
@@ -28,23 +31,20 @@
           <ul id="conversation-list" class="conversation-list">
               <!-- Conversations will be dynamically inserted here -->
           </ul>
-          <button id="new-chat-btn" class="export-btn">
-              <i class="fas fa-file-export"></i> New Chat
-          </button>
           <button id="export-chat-btn" class="export-btn">
-              <i class="fas fa-file-export"></i> Export Current Chat
-          </button>
-          <button id="regenerate-title-btn" class="export-btn">
-              <i class="fas fa-sync-alt"></i> Re-generate Title
-          </button>
-          <button id="settings-btn" class="export-btn">
-              <i class="fas fa-cog"></i> Settings
-          </button>
-          <div class="folder-controls">
-              <button id="create-folder-btn" title="Create New Folder">📁 New Folder</button>
-          </div>
-          <ul id="folder-list" class="folder-list"></ul>
-          <div class="folder-separator"></div>
+            <i class="fas fa-file-export"></i> Export Current Chat
+        </button>
+        <div class="sidebar-actions">
+            <button id="new-chat-btn" class="export-btn">
+                <i class="fas fa-file-plus"></i> New Chat
+            </button>
+            <button id="create-folder-btn" class="export-btn" title="Create New Folder">
+                📁 New Folder
+            </button>
+        </div>
+        
+        <ul id="folder-list" class="folder-list"></ul>
+
       </aside>
 
       <!-- Sidebar for Previous Conversations -->

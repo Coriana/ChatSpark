@@ -452,7 +452,11 @@ document.addEventListener("DOMContentLoaded", () => {
             const messageContent = document.createElement("div");
             messageContent.classList.add("message-content");
             const formattedContent = sanitizeHTML(msg.content)
-                .replace(/```([\s\S]*?)```/g, (match, code) => `<pre><code>${code.replace(/\n/g, '\u0000')}</code></pre>`) 
+                .replace(/```(\w+)?\n?([\s\S]*?)```/g, (match, lang, code) => {
+                    const dataLang = lang ? ` data-lang="${lang}"` : "";
+                    const langClass = lang ? ` class="language-${lang}"` : "";
+                    return `<pre${dataLang}><code${langClass}>${code.replace(/\n/g, '\u0000')}</code></pre>`;
+                })
                 .replace(/\n/g, "<br>")
                 .replace(/\u0000/g, '\n');
             messageContent.innerHTML = `
@@ -502,7 +506,9 @@ document.addEventListener("DOMContentLoaded", () => {
             button.classList.add('copy-code-btn');
             button.textContent = 'Copy';
             button.addEventListener('click', () => {
-                navigator.clipboard.writeText(block.innerText);
+                const codeElement = block.querySelector('code');
+                const codeText = codeElement ? codeElement.innerText : block.innerText;
+                navigator.clipboard.writeText(codeText);
                 button.textContent = 'Copied!';
                 setTimeout(() => (button.textContent = 'Copy'), 2000);
             });

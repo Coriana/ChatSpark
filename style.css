@@ -309,14 +309,24 @@ main {
     border-radius: 16px 16px 16px 0;
 }
 
+
 .message-content pre {
     background-color: #f6f8fa;
     border-radius: 8px;
-    padding: 0.75rem;
+    padding: 1.5rem 0.75rem 0.75rem;
     margin-top: 0.5rem;
     overflow-x: auto;
     font-family: 'Fira Code', monospace;
     position: relative;
+}
+
+.message-content pre::before {
+    content: attr(data-lang);
+    position: absolute;
+    top: 0.25rem;
+    left: 0.5rem;
+    font-size: 0.75rem;
+    color: #555;
 }
 
 .message-content pre code {
@@ -546,6 +556,10 @@ body.dark-mode .message.assistant .message-content {
 
 body.dark-mode .message-content pre {
     background-color: #2d2d2d;
+}
+
+body.dark-mode .message-content pre::before {
+    color: #ccc;
 }
 
 body.dark-mode .copy-code-btn {

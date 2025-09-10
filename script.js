@@ -44,6 +44,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Prevent multiple event listener attachments
     let isEventListenerAttached = false;
 
+    // Sidebar is visible by default
+    body.classList.add("sidebar-open");
+
     // Initialize Conversations
     loadConversations();
     loadSettings();
@@ -686,6 +689,7 @@ Return ONLY the title text with nothing else.`;
     function toggleSidebarVisibility() {
         sidebar.classList.toggle("hidden");
         sidebarclosed.classList.toggle("hidden");
+        body.classList.toggle("sidebar-open");
     }
 
     /**

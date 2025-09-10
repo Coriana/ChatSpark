@@ -11,6 +11,7 @@
     --chat-max-width: 800px;
     --chat-height: 80vh;
     --chat-font-size: 16px;
+    --sidebar-width: 250px;
     --color-primary: #4a90e2;
     --color-primary-hover: #357ab7;
     --color-background: #f5f7fa;
@@ -93,7 +94,7 @@ header .header-right button i {
 
 /* Sidebar Styles */
 .sidebar {
-    width: 300px;
+    width: var(--sidebar-width);
     background-color: #ffffff;
     border-right: 1px solid #ddd;
     padding: 1rem;
@@ -214,12 +215,12 @@ main {
     justify-content: center;
     align-items: center;
     padding: 2rem;
-    margin-left: 0; /* Adjusted for fixed sidebar */
+    margin-left: 0;
     transition: margin-left 0.3s ease-in-out;
 }
 
-.sidebar:not(.hidden) + main {
-    margin-left: 300px; /* Width of sidebar */
+body.sidebar-open main {
+    margin-left: var(--sidebar-width);
 }
 
 .chat-section {
@@ -626,7 +627,7 @@ footer {
         transform: translateX(-100%);
     }
 
-    .sidebar + main {
+    body.sidebar-open main {
         margin-left: 0;
     }
 }

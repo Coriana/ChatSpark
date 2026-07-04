@@ -13,7 +13,8 @@ ChatSpark was built with the belief that talking to AI should be simple and plea
 
 ## Features
 
-- **Connections & Models**: Add any OpenAI-compatible endpoint (OpenAI, llama.cpp, Ollama, LM Studio, vLLM…), fetch its model list automatically, and manage everything from a tabbed settings panel
+- **Connections & Models**: Add any OpenAI-compatible endpoint, fetch its model list automatically, and manage everything from a tabbed settings panel. Provider presets fill in the details for OpenAI, Anthropic, OpenRouter, Groq, Mistral, Hugging Face, Azure OpenAI, Ollama, LM Studio, and llama.cpp — with links to where each API key lives
+- **Key encryption**: Optionally encrypt your API keys at rest with a passphrase (AES-GCM + PBKDF2); you're asked for it once per session and decrypted keys never touch disk
 - **Switch models mid-conversation**: A model picker lives right in the header; every response is tagged with the model that wrote it
 - **Streaming responses**: Replies render token-by-token with proper Markdown — headings, lists, tables, and syntax-highlighted code blocks with copy buttons
 - **Image support**: Attach, paste, or drag & drop images into the chat (sent using the OpenAI vision format; large images are downscaled automatically)
@@ -34,8 +35,9 @@ ChatSpark was built with the belief that talking to AI should be simple and plea
 
 2. **Connect to your AI:**
    - The settings panel opens automatically on first run (or click ⚙️)
-   - Add a connection: name it, enter the API base URL (e.g. `https://api.openai.com/v1`), and your key if the server needs one
+   - Add a connection: pick a provider preset (or Custom), paste your key if the server needs one
    - Click **Fetch Models** to pull the model list (or add model ids manually), then **Save**
+   - Optionally enable **key encryption** at the bottom of the Connections tab
 
 3. **Start chatting:**
    - Pick a model from the dropdown in the header
@@ -55,7 +57,7 @@ ChatSpark is built with vanilla web technologies:
 - **IndexedDB** for conversations and images, **localStorage** for settings
 - Vendored [marked](https://github.com/markedjs/marked), [DOMPurify](https://github.com/cure53/DOMPurify), and [highlight.js](https://github.com/highlightjs/highlight.js) for safe, pretty Markdown rendering — still fully offline
 
-Your API keys are stored unencrypted in your browser's local storage and are only ever sent to the endpoints you configure. All conversation data stays on your device.
+API keys are only ever sent to the endpoints you configure, and all conversation data stays on your device. By default keys sit unencrypted in local storage; turn on passphrase encryption in Settings → Connections to store them as AES-GCM ciphertext instead.
 
 ## Making ChatSpark Your Own
 

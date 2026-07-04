@@ -375,6 +375,11 @@ body.dark-mode #model-picker {
     padding: 2px;
 }
 
+.folder-actions button.has-prompt {
+    opacity: 1;
+    filter: drop-shadow(0 0 2px var(--color-primary));
+}
+
 /* Popup menus (folder assignment, export) */
 .popup-menu {
     position: fixed;

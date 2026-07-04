@@ -850,8 +850,7 @@ function scheduleStreamRender(el, msg) {
 
 function buildApiMessages(conv, uptoIndex = null) {
     const out = [];
-    const sys = conv.systemPrompt !== undefined && conv.systemPrompt !== null
-        ? conv.systemPrompt : settings.systemPrompt;
+    const sys = effectiveSystemPrompt(conv);
     if (sys && sys.trim()) out.push({ role: "system", content: sys });
     const msgs = uptoIndex === null ? conv.messages : conv.messages.slice(0, uptoIndex);
     for (const m of msgs) {
@@ -1237,6 +1236,23 @@ function saveFolders() {
     localStorage.setItem("currentFolderId", currentFolderId === null ? "" : currentFolderId);
 }
 
+/* Returns the folder object containing a conversation id, or null if unfiled. */
+function folderOf(conversationId) {
+    for (const folder of Object.values(folders)) {
+        if (folder.conversations.includes(conversationId)) return folder;
+    }
+    return null;
+}
+
+/* Resolves the system prompt for a conversation: conversation override (even ""),
+ * else the folder default (if non-empty), else the global default. */
+function effectiveSystemPrompt(conv) {
+    if (conv.systemPrompt !== undefined && conv.systemPrompt !== null) return conv.systemPrompt;
+    const folder = folderOf(conv.id);
+    if (folder && typeof folder.systemPrompt === "string" && folder.systemPrompt) return folder.systemPrompt;
+    return settings.systemPrompt;
+}
+
 function loadFolders() {
     try {
         const saved = JSON.parse(localStorage.getItem("folders") || "null");
@@ -1291,8 +1307,12 @@ function renderFolderList() {
         const actions = document.createElement("div");
         actions.className = "folder-actions";
         actions.innerHTML = `
+            <button class="prompt-folder-btn" title="Folder system prompt">📝</button>
             <button class="rename-folder-btn" title="Rename Folder">✏️</button>
             <button class="delete-folder-btn" title="Delete Folder">🗑️</button>`;
+        if (typeof folder.systemPrompt === "string" && folder.systemPrompt) {
+            actions.querySelector(".prompt-folder-btn").classList.add("has-prompt");
+        }
         li.appendChild(actions);
 
         span.addEventListener("click", () => {
@@ -1300,6 +1320,21 @@ function renderFolderList() {
             saveFolders();
             renderFolderList();
             renderConversationList();
+        });
+        actions.querySelector(".prompt-folder-btn").addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const value = await textDialog({
+                title: `System Prompt — folder "${folder.name}"`,
+                message: "Default system prompt for every chat in this folder. Chats can still override it individually. Leave empty to fall back to the global default.",
+                value: folder.systemPrompt || "",
+                multiline: true,
+                placeholder: "You are a helpful assistant.",
+            });
+            if (value === null) return;
+            folder.systemPrompt = value;
+            saveFolders();
+            renderFolderList();
+            toast(`System prompt updated for folder "${folder.name}".`, "success");
         });
         actions.querySelector(".rename-folder-btn").addEventListener("click", async (e) => {
             e.stopPropagation();
@@ -2010,10 +2045,10 @@ function attachEventListeners() {
         const conv = currentConv();
         if (!conv) return;
         const effective = conv.systemPrompt !== undefined && conv.systemPrompt !== null
-            ? conv.systemPrompt : (settings.systemPrompt || "");
+            ? conv.systemPrompt : effectiveSystemPrompt(conv);
         const value = await textDialog({
             title: "System Prompt (this chat)",
-            message: "Sent as the system message with every request in this conversation. Leave empty for none.",
+            message: "Sent as the system message with every request in this conversation. Overrides the folder and global defaults. Leave empty for none.",
             value: effective,
             multiline: true,
             placeholder: "You are a helpful assistant.",

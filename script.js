@@ -54,14 +54,25 @@ function messageImages(content) {
  * Toasts, dialogs and popup menus (replacements for alert/prompt/confirm)
  * ========================================================================== */
 
-function toast(message, type = "info", duration = 3500) {
+function toast(message, type = "info", duration = 3500, action = null) {
     const container = $("#toast-container");
     const el = document.createElement("div");
     el.className = "toast" + (type !== "info" ? " " + type : "");
     el.textContent = message;
     container.appendChild(el);
     if (type === "error") duration = Math.max(duration, 5000);
-    setTimeout(() => el.remove(), duration);
+    let timer = setTimeout(() => el.remove(), duration);
+    if (action) {
+        const btn = document.createElement("button");
+        btn.className = "toast-action";
+        btn.textContent = action.label;
+        btn.addEventListener("click", () => {
+            clearTimeout(timer);
+            el.remove();
+            action.onClick();
+        });
+        el.appendChild(btn);
+    }
 }
 
 function baseDialog(innerHTML) {
@@ -386,6 +397,7 @@ let streamState = null;        // {controller} while a response is streaming
 let searchQuery = "";
 let editingDraft = null;       // connection being edited in settings
 let streamRenderTimer = null;
+let searchDebounceTimer = null;
 
 /* DOM references */
 let chatHistoryEl, chatForm, inputEl, submitBtn, stopBtn, attachBtn, imageInput,
@@ -514,6 +526,31 @@ function getActive() {
     const conn = connections.find(c => c.id === settings.activeConnectionId) || null;
     const model = conn && conn.models.includes(settings.activeModel) ? settings.activeModel : null;
     return { conn, model };
+}
+
+/* Returns pref if it points at a connection/model that still exist, else null. */
+function validModelPref(pref) {
+    if (!pref) return null;
+    const conn = connections.find(c => c.id === pref.connectionId);
+    if (!conn || !conn.models.includes(pref.model)) return null;
+    return pref;
+}
+
+/* Resolves the model preference for a conversation: its own pref, else the
+ * containing folder's default, else null. */
+function modelPrefFor(conv) {
+    return validModelPref(conv.modelPref) || validModelPref(folderOf(conv.id) && folderOf(conv.id).modelPref) || null;
+}
+
+/* Applies a conversation's (or its folder's) remembered model, if any. */
+function applyModelPref(conv) {
+    if (!conv) return;
+    const pref = modelPrefFor(conv);
+    if (!pref) return;
+    settings.activeConnectionId = pref.connectionId;
+    settings.activeModel = pref.model;
+    saveSettings();
+    renderModelPicker();
 }
 
 /* ==========================================================================
@@ -1001,10 +1038,27 @@ function deleteMessage(index) {
     if (streamState) return;
     const conv = currentConv();
     if (!conv || !conv.messages[index]) return;
+    const removedMessage = conv.messages[index];
+    const removedIndex = index;
+    const convId = conv.id;
     conv.messages.splice(index, 1);
     conv.updatedAt = Date.now();
     renderChatHistory();
     Store.put(conv).catch(e => console.error("Save failed:", e));
+    toast("Message deleted.", "info", 6000, {
+        label: "Undo",
+        onClick: () => {
+            const target = conversations[convId];
+            if (!target) return;
+            target.messages.splice(Math.min(removedIndex, target.messages.length), 0, removedMessage);
+            target.updatedAt = Date.now();
+            Store.put(target).catch(e => console.error("Save failed:", e));
+            if (currentConversationId === convId) {
+                renderChatHistory();
+                updateTokenEstimate();
+            }
+        },
+    });
 }
 
 function startEditMessage(index) {
@@ -1118,6 +1172,7 @@ function createNewConversation() {
     updateChatTitle();
     renderChatHistory();
     renderConversationList();
+    applyModelPref(conversations[id]);
     inputEl.focus();
 }
 
@@ -1128,6 +1183,7 @@ function switchConversation(id) {
     updateChatTitle();
     renderChatHistory();
     renderConversationList();
+    applyModelPref(conversations[id]);
     scrollToBottom(true);
 }
 
@@ -1140,9 +1196,8 @@ async function deleteConversation(id) {
     const conv = conversations[id];
     if (!conv) return;
     if (id === currentConversationId) stopStreaming();
-    const ok = await confirmDialog(`Delete "${conv.title}"? This cannot be undone.`,
-        { title: "Delete Conversation", confirmLabel: "Delete", danger: true });
-    if (!ok) return;
+    const snapshotConv = conv;
+    const snapshotFolderId = folderOf(id)?.id;
     Object.values(folders).forEach(folder => {
         const i = folder.conversations.indexOf(id);
         if (i !== -1) folder.conversations.splice(i, 1);
@@ -1162,6 +1217,19 @@ async function deleteConversation(id) {
     }
     renderConversationList();
     renderFolderList();
+    toast(`Deleted "${snapshotConv.title}".`, "info", 6000, {
+        label: "Undo",
+        onClick: () => {
+            conversations[id] = snapshotConv;
+            Store.put(snapshotConv).catch(e => console.error("Save failed:", e));
+            if (snapshotFolderId && folders[snapshotFolderId]) {
+                folders[snapshotFolderId].conversations.push(id);
+            }
+            saveFolders();
+            renderConversationList();
+            renderFolderList();
+        },
+    });
 }
 
 function convSortKey(conv) {
@@ -1171,15 +1239,41 @@ function convSortKey(conv) {
     return m ? parseInt(m[1], 10) : 0;
 }
 
+/* Builds a safe ~60-char snippet around the first match of `query` inside
+ * `text`, with the matched substring wrapped in <mark>. All pieces are
+ * escaped individually before assembly so the <mark> tags survive intact. */
+function buildSnippet(text, query, radius = 30) {
+    const lower = text.toLowerCase();
+    const q = query.toLowerCase();
+    const idx = lower.indexOf(q);
+    if (idx === -1) return "";
+    const start = Math.max(0, idx - radius);
+    const end = Math.min(text.length, idx + q.length + radius);
+    const prefix = (start > 0 ? "…" : "") + escapeHTML(text.slice(start, idx));
+    const match = escapeHTML(text.slice(idx, idx + q.length));
+    const suffix = escapeHTML(text.slice(idx + q.length, end)) + (end < text.length ? "…" : "");
+    return `${prefix}<mark>${match}</mark>${suffix}`;
+}
+
 function renderConversationList() {
     conversationListEl.innerHTML = "";
     let ids = currentFolderId && folders[currentFolderId]
         ? folders[currentFolderId].conversations.filter(id => conversations[id])
         : Object.keys(conversations);
 
-    if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        ids = ids.filter(id => (conversations[id].title || "").toLowerCase().includes(q));
+    const q = searchQuery.toLowerCase();
+    const snippets = {}; // id -> snippet HTML (only for content-only matches)
+    if (q) {
+        ids = ids.filter(id => {
+            const convo = conversations[id];
+            const titleMatch = (convo.title || "").toLowerCase().includes(q);
+            const match = (convo.messages || []).find(m => messageText(m.content).toLowerCase().includes(q));
+            if (match) {
+                if (!titleMatch) snippets[id] = buildSnippet(messageText(match.content), searchQuery);
+                return true;
+            }
+            return titleMatch;
+        });
     }
 
     ids.sort((a, b) => convSortKey(conversations[b]) - convSortKey(conversations[a]));
@@ -1190,10 +1284,19 @@ function renderConversationList() {
         li.classList.add("conversation-item");
         if (id === currentConversationId) li.classList.add("active");
 
+        const label = document.createElement("div");
+        label.className = "conversation-label";
         const span = document.createElement("span");
         span.textContent = convo.title;
         span.title = convo.title;
-        li.appendChild(span);
+        label.appendChild(span);
+        if (snippets[id]) {
+            const snippet = document.createElement("div");
+            snippet.className = "conversation-snippet";
+            snippet.innerHTML = snippets[id];
+            label.appendChild(snippet);
+        }
+        li.appendChild(label);
 
         const actions = document.createElement("div");
         actions.className = "conversation-actions";
@@ -1205,7 +1308,7 @@ function renderConversationList() {
 
         span.addEventListener("click", () => switchConversation(id));
         li.addEventListener("click", (e) => {
-            if (e.target === li) switchConversation(id);
+            if (e.target === li || label.contains(e.target)) switchConversation(id);
         });
         actions.querySelector(".folder-assign-btn").addEventListener("click", (e) => {
             e.stopPropagation();
@@ -1307,11 +1410,15 @@ function renderFolderList() {
         const actions = document.createElement("div");
         actions.className = "folder-actions";
         actions.innerHTML = `
+            <button class="model-folder-btn" title="Folder default model">🧠</button>
             <button class="prompt-folder-btn" title="Folder system prompt">📝</button>
             <button class="rename-folder-btn" title="Rename Folder">✏️</button>
             <button class="delete-folder-btn" title="Delete Folder">🗑️</button>`;
         if (typeof folder.systemPrompt === "string" && folder.systemPrompt) {
             actions.querySelector(".prompt-folder-btn").classList.add("has-prompt");
+        }
+        if (validModelPref(folder.modelPref)) {
+            actions.querySelector(".model-folder-btn").classList.add("has-prompt");
         }
         li.appendChild(actions);
 
@@ -1320,6 +1427,33 @@ function renderFolderList() {
             saveFolders();
             renderFolderList();
             renderConversationList();
+        });
+        actions.querySelector(".model-folder-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            const items = [{
+                label: "No default",
+                selected: !folder.modelPref,
+                onClick: () => {
+                    delete folder.modelPref;
+                    saveFolders();
+                    renderFolderList();
+                },
+            }];
+            for (const conn of connections) {
+                for (const model of conn.models) {
+                    items.push({
+                        label: `${conn.name} · ${model}`,
+                        selected: !!(folder.modelPref && folder.modelPref.connectionId === conn.id && folder.modelPref.model === model),
+                        onClick: () => {
+                            folder.modelPref = { connectionId: conn.id, model };
+                            saveFolders();
+                            renderFolderList();
+                            toast(`Default model set for folder "${folder.name}".`, "success");
+                        },
+                    });
+                }
+            }
+            showMenu(e.target, items);
         });
         actions.querySelector(".prompt-folder-btn").addEventListener("click", async (e) => {
             e.stopPropagation();
@@ -1432,6 +1566,11 @@ function onModelPickerChange() {
     settings.activeConnectionId = connId;
     settings.activeModel = rest.join("||");
     saveSettings();
+    const conv = conversations[currentConversationId];
+    if (conv) {
+        conv.modelPref = { connectionId: settings.activeConnectionId, model: settings.activeModel };
+        Store.put(conv).catch(e => console.error("Save failed:", e));
+    }
 }
 
 /* ==========================================================================
@@ -2086,8 +2225,13 @@ function attachEventListeners() {
     $("#new-chat-btn").addEventListener("click", createNewConversation);
     $("#create-folder-btn").addEventListener("click", createNewFolder);
     $("#conversation-search").addEventListener("input", (e) => {
-        searchQuery = e.target.value.trim();
-        renderConversationList();
+        const value = e.target.value.trim();
+        if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(() => {
+            searchDebounceTimer = null;
+            searchQuery = value;
+            renderConversationList();
+        }, 150);
     });
     $("#export-chat-btn").addEventListener("click", (e) => {
         const conv = currentConv();
@@ -2241,6 +2385,7 @@ async function init() {
     }
     renderFolderList();
     renderModelPicker();
+    applyModelPref(conversations[currentConversationId]);
     populatePresetSelect();
     attachEventListeners();
     autoResizeInput();

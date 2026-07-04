@@ -18,9 +18,9 @@ ChatSpark was built with the belief that talking to AI should be simple and plea
 - **Switch models mid-conversation**: A model picker lives right in the header; every response is tagged with the model that wrote it
 - **Streaming responses**: Replies render token-by-token with proper Markdown — headings, lists, tables, and syntax-highlighted code blocks with copy buttons
 - **Image support**: Attach, paste, or drag & drop images into the chat (sent using the OpenAI vision format; large images are downscaled automatically)
-- **System prompts**: Set a global default and override it per conversation
+- **System prompts**: Set a global default, give a folder its own default (folders act like projects), and override either per conversation
 - **Edit & regenerate**: Edit any of your messages and resend, or regenerate any assistant response in place — with a different model if you like
-- **Conversation management**: Auto-generated titles, folders, search, and per-chat export to Markdown or JSON
+- **Conversation management**: Auto-generated titles, folders, full-text search across titles and message content, undo for deleted messages and conversations, and per-chat export to Markdown or JSON
 - **Backup & restore**: Export all data to a single JSON file and import it on another machine
 - **Roomy storage**: Conversations (including images) live in IndexedDB, not the cramped 5 MB localStorage — existing chats are migrated automatically
 

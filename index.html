@@ -3,19 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local Chat Interface</title>
+    <title>ChatSpark</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="vendor/github-dark.min.css">
 </head>
 <body>
     <header>
         <div class="header-left">
-            <button id="regenerate-title-btn" class="export-btn" title="Re-generate Title"> 
-            ♻️</button>
-            <h1 id="chat-title" contenteditable="true">Local Chat Interface</h1>
+            <button id="regenerate-title-btn" class="icon-btn" title="Re-generate Title">♻️</button>
+            <h1 id="chat-title" contenteditable="true" spellcheck="false">ChatSpark</h1>
+            <button id="system-prompt-btn" class="icon-btn" title="Edit system prompt for this chat">📝</button>
         </div>
         <div class="header-right">
-          <button id="dark-mode-toggle" class="theme-toggle-btn">Toggle Dark Mode</button>
-          <button id="settings-btn" class="export-btn" title="Settings">⚙️ </button>
+            <select id="model-picker" title="Active model" aria-label="Active model"></select>
+            <button id="dark-mode-toggle" class="icon-btn" title="Toggle Dark Mode">🌓</button>
+            <button id="settings-btn" class="icon-btn" title="Settings">⚙️</button>
         </div>
     </header>
 
@@ -24,97 +26,163 @@
       <aside id="sidebar" class="sidebar" aria-label="Previous Conversations">
           <div class="sidebar-header">
               <h2>Conversations</h2>
-              <button id="close-sidebar-btn" class="close-sidebar-btn" aria-label="Close Sidebar">
-                  <i class="fas fa-times">x</i>
-              </button>
+              <button id="close-sidebar-btn" class="close-sidebar-btn" aria-label="Close Sidebar">«</button>
           </div>
-          <ul id="conversation-list" class="conversation-list">
-              <!-- Conversations will be dynamically inserted here -->
-          </ul>
-          <button id="export-chat-btn" class="export-btn">
-            <i class="fas fa-file-export"></i> Export Current Chat
-        </button>
-        <div class="sidebar-actions">
-            <button id="new-chat-btn" class="export-btn">
-                <i class="fas fa-file-plus"></i> New Chat
-            </button>
-            <button id="create-folder-btn" class="export-btn" title="Create New Folder">
-                📁 New Folder
-            </button>
-        </div>
-        
-        <ul id="folder-list" class="folder-list"></ul>
-
+          <div class="sidebar-actions">
+              <button id="new-chat-btn" class="primary-btn">＋ New Chat</button>
+              <button id="create-folder-btn" class="secondary-btn" title="Create New Folder">📁 Folder</button>
+          </div>
+          <input type="search" id="conversation-search" class="conversation-search" placeholder="Search chats…" aria-label="Search conversations">
+          <ul id="folder-list" class="folder-list"></ul>
+          <ul id="conversation-list" class="conversation-list"></ul>
+          <button id="export-chat-btn" class="secondary-btn export-chat-btn">⬇ Export Current Chat</button>
       </aside>
 
-      <!-- Sidebar for Previous Conversations -->
-      <aside id="sidebarclosed" class="sidebarclosed hidden" aria-label="Closed Sidebar">
+      <!-- Collapsed sidebar rail -->
+      <aside id="sidebarclosed" class="sidebarclosed hidden" aria-label="Collapsed Sidebar">
           <div class="closed-sidebar-header">
-              <button id="open-sidebar-btn" class="open-sidebar-btn" aria-label="Close Sidebar">
-                  <i class="fas fa-times">>></i>
-              </button>
+              <button id="open-sidebar-btn" class="open-sidebar-btn" aria-label="Open Sidebar">»</button>
           </div>
       </aside>
 
         <main>
-            <section class="chat-section">
+            <section class="chat-section" id="chat-section">
                 <div class="chat-history" aria-label="Conversation History">
-                    <h2 class="previous-chat-title">Conversation History</h2>
                     <!-- Messages will be dynamically inserted here -->
                 </div>
+                <div id="attachment-strip" class="attachment-strip hidden"></div>
                 <div class="chat-input">
                     <form id="chat-form" aria-label="Chat Form">
-                        <textarea id="search" name="search" placeholder="Type your message..." required aria-required="true"></textarea>
+                        <button type="button" id="attach-btn" class="icon-btn attach-btn" title="Attach image (or paste / drag &amp; drop)">📎</button>
+                        <textarea id="search" name="search" placeholder="Type your message…" aria-label="Message" rows="1"></textarea>
                         <button type="submit" id="submit-btn">Send</button>
+                        <button type="button" id="stop-btn" class="stop-btn hidden">■ Stop</button>
                     </form>
+                    <div class="composer-meta">
+                        <span id="token-estimate" title="Rough estimate of tokens that will be sent"></span>
+                    </div>
                 </div>
             </section>
         </main>
     </div>
 
+    <input type="file" id="image-input" accept="image/*" multiple hidden>
+
     <!-- Settings Modal -->
     <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
-        <div class="modal-content">
+        <div class="modal-content settings-content">
             <span class="close-button" aria-label="Close Settings Modal">&times;</span>
             <h2 id="settings-modal-title">Settings</h2>
-            <form id="settings-form">
+            <div class="settings-tabs" role="tablist">
+                <button class="tab-btn active" data-tab="connections" role="tab">Connections</button>
+                <button class="tab-btn" data-tab="chat" role="tab">Chat</button>
+                <button class="tab-btn" data-tab="appearance" role="tab">Appearance</button>
+                <button class="tab-btn" data-tab="data" role="tab">Data</button>
+            </div>
+
+            <!-- Connections tab -->
+            <div class="tab-panel" id="tab-connections">
+                <div id="connection-list" class="connection-list"></div>
+                <button id="add-connection-btn" class="primary-btn">＋ Add Connection</button>
+                <div id="connection-editor" class="connection-editor hidden">
+                    <div class="form-group">
+                        <label for="conn-name">Name</label>
+                        <input type="text" id="conn-name" placeholder="e.g. OpenAI, Local llama.cpp">
+                    </div>
+                    <div class="form-group">
+                        <label for="conn-url">Base URL</label>
+                        <input type="text" id="conn-url" placeholder="https://api.openai.com/v1">
+                        <small>The API base — <code>/chat/completions</code> is appended automatically.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="conn-key">API Key (optional)</label>
+                        <input type="password" id="conn-key" placeholder="sk-…" autocomplete="off">
+                        <small class="warning-text">⚠️ Stored unencrypted in this browser's local storage.</small>
+                    </div>
+                    <div class="conn-editor-buttons">
+                        <button type="button" id="conn-test-btn" class="secondary-btn">Test Connection</button>
+                        <button type="button" id="conn-fetch-models-btn" class="secondary-btn">Fetch Models</button>
+                    </div>
+                    <div id="conn-status" class="conn-status" role="status"></div>
+                    <div class="form-group">
+                        <label>Models</label>
+                        <div id="conn-model-chips" class="chip-list"></div>
+                        <div class="chip-add">
+                            <input type="text" id="conn-model-input" placeholder="Add model id manually…">
+                            <button type="button" id="conn-model-add-btn" class="secondary-btn">Add</button>
+                        </div>
+                    </div>
+                    <div class="conn-editor-buttons">
+                        <button type="button" id="conn-save-btn" class="primary-btn">Save Connection</button>
+                        <button type="button" id="conn-cancel-btn" class="secondary-btn">Cancel</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat tab -->
+            <div class="tab-panel hidden" id="tab-chat">
                 <div class="form-group">
-                    <label for="model-select">Select Model:</label>
-                    <select id="model-select"></select>
+                    <label for="default-system-prompt">Default system prompt (new chats)</label>
+                    <textarea id="default-system-prompt" rows="4" placeholder="e.g. You are a helpful assistant."></textarea>
+                    <small>Each chat can override this via the 📝 button in the header.</small>
+                </div>
+                <div class="form-group form-row">
+                    <div>
+                        <label for="setting-temperature">Temperature</label>
+                        <input type="number" id="setting-temperature" min="0" max="2" step="0.1" placeholder="server default">
+                    </div>
+                    <div>
+                        <label for="setting-max-tokens">Max tokens</label>
+                        <input type="number" id="setting-max-tokens" min="1" step="1" placeholder="server default">
+                    </div>
+                </div>
+                <div class="form-group checkbox-group">
+                    <label><input type="checkbox" id="setting-send-on-enter"> Send on Enter (Shift+Enter for newline)</label>
+                </div>
+            </div>
+
+            <!-- Appearance tab -->
+            <div class="tab-panel hidden" id="tab-appearance">
+                <div class="form-group">
+                    <label for="chat-width">Chat Width (px)</label>
+                    <input type="number" id="chat-width" min="400" max="1600" placeholder="800">
                 </div>
                 <div class="form-group">
-                    <label for="new-model-name">New Model Name:</label>
-                    <input type="text" id="new-model-name" placeholder="e.g., gpt-4">
+                    <label for="chat-height">Chat Height (vh)</label>
+                    <input type="number" id="chat-height" min="40" max="100" placeholder="80">
                 </div>
                 <div class="form-group">
-                    <label for="new-model-url">Server URL:</label>
-                    <input type="url" id="new-model-url" placeholder="https://api.openai.com/v1/chat/completions">
+                    <label for="chat-font-size">Chat Font Size (px)</label>
+                    <input type="number" id="chat-font-size" min="12" max="24" placeholder="16">
+                </div>
+                <small>Changes apply immediately.</small>
+            </div>
+
+            <!-- Data tab -->
+            <div class="tab-panel hidden" id="tab-data">
+                <div class="form-group">
+                    <label>Backup</label>
+                    <div class="conn-editor-buttons">
+                        <button type="button" id="export-all-btn" class="secondary-btn">⬇ Export All Data</button>
+                        <button type="button" id="import-data-btn" class="secondary-btn">⬆ Import Data</button>
+                    </div>
+                    <small>Export includes conversations, folders, settings and connections (API keys included — keep the file safe).</small>
                 </div>
                 <div class="form-group">
-                    <label for="new-model-key">API Key (Optional):</label>
-                    <input type="password" id="new-model-key" placeholder="Enter your API key if required">
-                    <small class="warning-text">⚠️ Your API key is stored locally in your browser. Ensure your device is secure.</small>
+                    <label>Danger zone</label>
+                    <button type="button" id="clear-data-btn" class="danger-btn">Delete All Data</button>
                 </div>
-                <button type="button" id="add-model-btn" class="add-model-btn">Add Model</button>
-                <div class="form-group">
-                    <label for="chat-width">Chat Width (px):</label>
-                    <input type="number" id="chat-width" name="chat-width" min="400" max="1200" placeholder="800">
-                </div>
-                <div class="form-group">
-                    <label for="chat-height">Chat Height (vh):</label>
-                    <input type="number" id="chat-height" name="chat-height" min="40" max="100" placeholder="80">
-                </div>
-                <div class="form-group">
-                    <label for="chat-font-size">Chat Font Size (px):</label>
-                    <input type="number" id="chat-font-size" name="chat-font-size" min="12" max="24" placeholder="16">
-                </div>
-                <button type="submit" class="save-btn">Save Settings</button>
-            </form>
+                <input type="file" id="import-input" accept="application/json,.json" hidden>
+            </div>
         </div>
     </div>
 
-    <!-- Loading Indicator -->
-    <div id="loading-indicator" class="hidden" role="status" aria-live="polite">Loading...</div>
+    <div id="toast-container" aria-live="polite"></div>
+    <div id="dialog-root"></div>
+
+    <script src="vendor/marked.min.js"></script>
+    <script src="vendor/purify.min.js"></script>
+    <script src="vendor/highlight.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

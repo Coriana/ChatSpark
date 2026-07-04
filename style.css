@@ -1071,6 +1071,22 @@ body.dark-mode .message-text :not(pre) > code {
 .conn-status.ok { color: #2e9e44; }
 .conn-status.error { color: var(--color-danger); }
 
+.key-security {
+    border-top: 1px solid var(--color-border);
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+}
+
+.key-security > label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 0.35rem;
+}
+
+#conn-preset-help a {
+    color: var(--color-primary);
+}
+
 /* Model chips */
 .chip-list {
     display: flex;

@@ -98,11 +98,11 @@ function confirmDialog(message, { title = "Confirm", confirmLabel = "OK", danger
 }
 
 /* Returns the entered string, or null if cancelled. */
-function textDialog({ title = "", message = "", value = "", multiline = false, placeholder = "", confirmLabel = "Save" } = {}) {
+function textDialog({ title = "", message = "", value = "", multiline = false, password = false, placeholder = "", confirmLabel = "Save" } = {}) {
     return new Promise(resolve => {
         const field = multiline
             ? `<textarea class="dialog-field" placeholder="${escapeHTML(placeholder)}"></textarea>`
-            : `<input type="text" class="dialog-field" placeholder="${escapeHTML(placeholder)}">`;
+            : `<input type="${password ? "password" : "text"}" class="dialog-field" placeholder="${escapeHTML(placeholder)}" autocomplete="off">`;
         const d = baseDialog(`
             <h3>${escapeHTML(title)}</h3>
             ${message ? `<p class="dialog-message">${escapeHTML(message)}</p>` : ""}
@@ -265,6 +265,77 @@ const Store = (() => {
  * App state
  * ========================================================================== */
 
+/* ==========================================================================
+ * KeyVault: optional encryption-at-rest for API keys (PBKDF2 + AES-GCM).
+ * Ported from the old connect_apiwizard concept, hardened with a random salt.
+ * Decrypted keys live only in memory; the passphrase is asked once per session.
+ * ========================================================================== */
+
+const KeyVault = (() => {
+    const MARKER = "keyVault";
+    const CHECK_VALUE = "chatspark-vault-check";
+    let cryptoKey = null;
+
+    function config() {
+        try { return JSON.parse(localStorage.getItem(MARKER) || "null"); } catch (e) { return null; }
+    }
+    const supported = () => !!(window.crypto && crypto.subtle);
+    const enabled = () => !!config();
+    const unlocked = () => !!cryptoKey;
+
+    function toB64(bytes) { return btoa(String.fromCharCode(...new Uint8Array(bytes))); }
+    function fromB64(str) { return Uint8Array.from(atob(str), c => c.charCodeAt(0)); }
+
+    async function derive(passphrase, salt) {
+        const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+        return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: 310000, hash: "SHA-256" },
+            base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+    }
+
+    async function encryptString(plain) {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, new TextEncoder().encode(plain));
+        const buf = new Uint8Array(iv.length + ct.byteLength);
+        buf.set(iv, 0);
+        buf.set(new Uint8Array(ct), iv.length);
+        return toB64(buf);
+    }
+
+    async function decryptString(payload) {
+        const data = fromB64(payload);
+        const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: data.slice(0, 12) }, cryptoKey, data.slice(12));
+        return new TextDecoder().decode(plain);
+    }
+
+    async function enable(passphrase) {
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        cryptoKey = await derive(passphrase, salt);
+        const check = await encryptString(CHECK_VALUE);
+        localStorage.setItem(MARKER, JSON.stringify({ salt: toB64(salt), check }));
+    }
+
+    async function unlock(passphrase) {
+        const cfg = config();
+        if (!cfg) return false;
+        const previous = cryptoKey;
+        cryptoKey = await derive(passphrase, fromB64(cfg.salt));
+        try {
+            if (await decryptString(cfg.check) !== CHECK_VALUE) throw new Error("bad check");
+            return true;
+        } catch (e) {
+            cryptoKey = previous;
+            return false;
+        }
+    }
+
+    function disable() {
+        cryptoKey = null;
+        localStorage.removeItem(MARKER);
+    }
+
+    return { supported, enabled, unlocked, enable, unlock, disable, encryptString, decryptString };
+})();
+
 const DEFAULT_SETTINGS = {
     chatWidth: "800",
     chatHeight: "80",
@@ -287,6 +358,22 @@ Rules:
 - Avoid generic titles like "Chat", "Conversation", "General", "Discussion"
 
 Return ONLY the title text with nothing else.`;
+
+/* Provider presets for the connection editor (ported from the old setup-wizard
+ * concept): pre-fill the endpoint and link to where the API key lives. */
+const PROVIDER_PRESETS = [
+    { id: "custom", label: "Custom (OpenAI-compatible)", help: "Any endpoint that speaks the OpenAI chat completions API." },
+    { id: "openai", label: "OpenAI", name: "OpenAI", baseUrl: "https://api.openai.com/v1", keyUrl: "https://platform.openai.com/api-keys" },
+    { id: "anthropic", label: "Anthropic", name: "Anthropic", baseUrl: "https://api.anthropic.com/v1", keyUrl: "https://console.anthropic.com/settings/keys" },
+    { id: "openrouter", label: "OpenRouter", name: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", keyUrl: "https://openrouter.ai/keys" },
+    { id: "groq", label: "Groq", name: "Groq", baseUrl: "https://api.groq.com/openai/v1", keyUrl: "https://console.groq.com/keys" },
+    { id: "mistral", label: "Mistral", name: "Mistral", baseUrl: "https://api.mistral.ai/v1", keyUrl: "https://console.mistral.ai/api-keys" },
+    { id: "huggingface", label: "Hugging Face", name: "Hugging Face", baseUrl: "https://router.huggingface.co/v1", keyUrl: "https://huggingface.co/settings/tokens" },
+    { id: "azure", label: "Azure OpenAI", name: "Azure OpenAI", baseUrl: "https://YOUR-RESOURCE.openai.azure.com/openai/deployments/YOUR-DEPLOYMENT", authStyle: "api-key", query: "api-version=2024-02-15-preview", keyUrl: "https://portal.azure.com/", help: "Replace YOUR-RESOURCE and YOUR-DEPLOYMENT in the URL, then add your deployment name as the model." },
+    { id: "ollama", label: "Ollama (local)", name: "Ollama", baseUrl: "http://localhost:11434/v1", help: "No key needed — just have Ollama running." },
+    { id: "lmstudio", label: "LM Studio (local)", name: "LM Studio", baseUrl: "http://localhost:1234/v1", help: "No key needed — enable the local server in LM Studio." },
+    { id: "llamacpp", label: "llama.cpp (local)", name: "llama.cpp", baseUrl: "http://localhost:8080/v1", help: "No key needed — start llama-server first." },
+];
 
 let conversations = {};        // id -> conversation
 let currentConversationId = null;
@@ -332,8 +419,45 @@ function saveSettings() {
     localStorage.setItem("sparkSettings", JSON.stringify(settings));
 }
 
-function saveConnections() {
-    localStorage.setItem("connections", JSON.stringify(connections));
+async function saveConnections() {
+    let toStore = connections;
+    if (KeyVault.enabled()) {
+        toStore = [];
+        for (const c of connections) {
+            const { apiKey, ...rest } = c;
+            const copy = { ...rest };
+            if (KeyVault.unlocked()) {
+                copy.apiKeyEnc = apiKey ? await KeyVault.encryptString(apiKey) : "";
+            }
+            // While locked, keep whatever apiKeyEnc the connection already carries.
+            toStore.push(copy);
+        }
+    }
+    localStorage.setItem("connections", JSON.stringify(toStore));
+}
+
+/* Prompts for the vault passphrase (if needed) and decrypts keys into memory. */
+async function unlockVault() {
+    if (!KeyVault.enabled() || KeyVault.unlocked()) return true;
+    const pass = await textDialog({
+        title: "Unlock API Keys",
+        message: "Your API keys are encrypted at rest. Enter your passphrase to unlock them for this session.",
+        password: true,
+        confirmLabel: "Unlock",
+    });
+    if (pass === null || pass === "") return false;
+    if (!(await KeyVault.unlock(pass))) {
+        toast("Wrong passphrase.", "error");
+        return false;
+    }
+    for (const c of connections) {
+        if (c.apiKeyEnc) {
+            try { c.apiKey = await KeyVault.decryptString(c.apiKeyEnc); }
+            catch (e) { console.error("Key decrypt failed:", e); }
+        }
+    }
+    renderEncryptionStatus();
+    return true;
 }
 
 /* Pre-refactor "models" were {name, apiUrl, apiKey} where name doubled as the
@@ -430,10 +554,24 @@ async function migrateLegacyConversations() {
  * ========================================================================== */
 
 function apiHeaders(conn) {
-    return {
-        "Content-Type": "application/json",
-        ...(conn.apiKey ? { "Authorization": "Bearer " + conn.apiKey } : {}),
-    };
+    const headers = { "Content-Type": "application/json" };
+    if (conn.apiKey) {
+        if (conn.authStyle === "api-key") headers["api-key"] = conn.apiKey;
+        else headers["Authorization"] = "Bearer " + conn.apiKey;
+    }
+    // Anthropic rejects browser requests unless this opt-in header is present.
+    if (/\bapi\.anthropic\.com\b/.test(conn.baseUrl || "")) {
+        headers["anthropic-dangerous-direct-browser-access"] = "true";
+    }
+    return headers;
+}
+
+/* Builds a full endpoint URL, honoring a connection's extra query string
+ * (e.g. Azure's api-version). */
+function endpointUrl(conn, path) {
+    const url = joinUrl(conn.baseUrl, path);
+    if (!conn.query) return url;
+    return url + (url.includes("?") ? "&" : "?") + conn.query;
 }
 
 function buildPayloadOptions() {
@@ -459,7 +597,7 @@ async function readApiError(response) {
 /* Streaming chat completion. onDelta receives the accumulated text so far. */
 async function streamChatCompletion(conn, model, messages, { signal, onDelta } = {}) {
     const payload = { model, messages, stream: true, ...buildPayloadOptions() };
-    const response = await fetch(joinUrl(conn.baseUrl, "/chat/completions"), {
+    const response = await fetch(endpointUrl(conn, "/chat/completions"), {
         method: "POST",
         headers: apiHeaders(conn),
         body: JSON.stringify(payload),
@@ -511,7 +649,7 @@ async function streamChatCompletion(conn, model, messages, { signal, onDelta } =
 /* Non-streaming completion (used for title generation). */
 async function chatCompletion(conn, model, messages) {
     const payload = { model, messages, stream: false };
-    const response = await fetch(joinUrl(conn.baseUrl, "/chat/completions"), {
+    const response = await fetch(endpointUrl(conn, "/chat/completions"), {
         method: "POST",
         headers: apiHeaders(conn),
         body: JSON.stringify(payload),
@@ -522,10 +660,9 @@ async function chatCompletion(conn, model, messages) {
         ? (data.choices[0].message.content || "") : "";
 }
 
-async function fetchModelList(baseUrl, apiKey) {
-    const response = await fetch(joinUrl(normalizeBaseUrl(baseUrl), "/models"), {
-        headers: apiKey ? { "Authorization": "Bearer " + apiKey } : {},
-    });
+async function fetchModelList(connLike) {
+    const conn = { ...connLike, baseUrl: normalizeBaseUrl(connLike.baseUrl) };
+    const response = await fetch(endpointUrl(conn, "/models"), { headers: apiHeaders(conn) });
     if (!response.ok) throw new Error(await readApiError(response));
     const data = await response.json();
     const list = Array.isArray(data.data) ? data.data : (Array.isArray(data.models) ? data.models : []);
@@ -740,6 +877,12 @@ async function handleSend() {
         openSettingsModal("connections");
         return;
     }
+    // Unlock before the message is added, so a cancelled unlock leaves the
+    // draft in the input box instead of an unanswered message in history.
+    if (conn.apiKeyEnc && !conn.apiKey && !(await unlockVault())) {
+        toast("API keys are locked — unlock them to send messages.", "error");
+        return;
+    }
 
     let content;
     if (pendingAttachments.length) {
@@ -772,6 +915,10 @@ async function generateAssistantResponse(conv, replaceIndex = null) {
     if (!conn || !model) {
         toast("Add a connection and pick a model first.", "error");
         openSettingsModal("connections");
+        return;
+    }
+    if (conn.apiKeyEnc && !conn.apiKey && !(await unlockVault())) {
+        toast("API keys are locked — unlock them to send messages.", "error");
         return;
     }
 
@@ -1355,6 +1502,7 @@ function openSettingsModal(tab = "connections") {
     settingsModal.classList.remove("hidden");
     selectSettingsTab(tab);
     renderConnectionList();
+    renderEncryptionStatus();
     hideConnectionEditor();
     $("#default-system-prompt").value = settings.systemPrompt || "";
     $("#setting-temperature").value = settings.temperature;
@@ -1401,7 +1549,7 @@ function renderConnectionList() {
         info.className = "conn-info";
         info.innerHTML = `
             <div class="conn-name">${escapeHTML(conn.name)}</div>
-            <div class="conn-detail">${escapeHTML(conn.baseUrl)} · ${conn.models.length} model${conn.models.length === 1 ? "" : "s"}${conn.apiKey ? " · 🔑" : ""}</div>`;
+            <div class="conn-detail">${escapeHTML(conn.baseUrl)} · ${conn.models.length} model${conn.models.length === 1 ? "" : "s"}${(conn.apiKey || conn.apiKeyEnc) ? " · 🔑" : ""}</div>`;
         row.appendChild(info);
         const actions = document.createElement("div");
         actions.className = "conn-row-actions";
@@ -1430,17 +1578,58 @@ function renderConnectionList() {
     }
 }
 
-function showConnectionEditor(conn = null) {
+async function showConnectionEditor(conn = null) {
+    // Editing while the vault is locked would silently lose stored keys on save.
+    if (KeyVault.enabled() && !KeyVault.unlocked() && connections.some(c => c.apiKeyEnc)) {
+        if (!(await unlockVault())) {
+            toast("Unlock your API keys to edit connections.", "error");
+            return;
+        }
+    }
     editingDraft = conn
-        ? { id: conn.id, name: conn.name, baseUrl: conn.baseUrl, apiKey: conn.apiKey, models: [...conn.models] }
-        : { id: null, name: "", baseUrl: "", apiKey: "", models: [] };
+        ? { id: conn.id, name: conn.name, baseUrl: conn.baseUrl, apiKey: conn.apiKey || "", models: [...conn.models], authStyle: conn.authStyle || "bearer", query: conn.query || "" }
+        : { id: null, name: "", baseUrl: "", apiKey: "", models: [], authStyle: "bearer", query: "" };
+    $("#conn-preset").value = "custom";
+    renderPresetHelp();
     $("#conn-name").value = editingDraft.name;
     $("#conn-url").value = editingDraft.baseUrl;
     $("#conn-key").value = editingDraft.apiKey;
+    $("#conn-auth-style").value = editingDraft.authStyle;
+    $("#conn-query").value = editingDraft.query;
     setConnStatus("");
     renderModelChips();
     $("#connection-editor").classList.remove("hidden");
     $("#conn-name").focus();
+}
+
+function populatePresetSelect() {
+    const sel = $("#conn-preset");
+    sel.innerHTML = "";
+    for (const p of PROVIDER_PRESETS) {
+        const option = document.createElement("option");
+        option.value = p.id;
+        option.textContent = p.label;
+        sel.appendChild(option);
+    }
+}
+
+function applyPreset(presetId) {
+    const p = PROVIDER_PRESETS.find(x => x.id === presetId);
+    if (!p || !editingDraft) return;
+    if (p.baseUrl) $("#conn-url").value = p.baseUrl;
+    if (p.name) $("#conn-name").value = p.name;
+    $("#conn-auth-style").value = p.authStyle || "bearer";
+    $("#conn-query").value = p.query || "";
+    renderPresetHelp();
+}
+
+function renderPresetHelp() {
+    const p = PROVIDER_PRESETS.find(x => x.id === $("#conn-preset").value);
+    const el = $("#conn-preset-help");
+    if (!p) { el.innerHTML = ""; return; }
+    const link = p.keyUrl
+        ? `<a href="${p.keyUrl}" target="_blank" rel="noopener noreferrer">Get your API key ↗</a>` : "";
+    el.innerHTML = [escapeHTML(p.help || ""), link].filter(Boolean).join(" · ");
 }
 
 function hideConnectionEditor() {
@@ -1481,6 +1670,8 @@ function readEditorInputs() {
     editingDraft.name = $("#conn-name").value.trim();
     editingDraft.baseUrl = normalizeBaseUrl($("#conn-url").value);
     editingDraft.apiKey = $("#conn-key").value.trim();
+    editingDraft.authStyle = $("#conn-auth-style").value;
+    editingDraft.query = $("#conn-query").value.trim().replace(/^[?&]+/, "");
 }
 
 async function testConnection() {
@@ -1488,7 +1679,7 @@ async function testConnection() {
     if (!editingDraft.baseUrl) { setConnStatus("Enter a base URL first.", "error"); return; }
     setConnStatus("Testing…");
     try {
-        const models = await fetchModelList(editingDraft.baseUrl, editingDraft.apiKey);
+        const models = await fetchModelList(editingDraft);
         setConnStatus(`✓ Connected — ${models.length} model${models.length === 1 ? "" : "s"} available.`, "ok");
     } catch (err) {
         setConnStatus("✗ " + describeFetchError(err), "error");
@@ -1500,7 +1691,7 @@ async function fetchModelsIntoDraft() {
     if (!editingDraft.baseUrl) { setConnStatus("Enter a base URL first.", "error"); return; }
     setConnStatus("Fetching models…");
     try {
-        const models = await fetchModelList(editingDraft.baseUrl, editingDraft.apiKey);
+        const models = await fetchModelList(editingDraft);
         if (!models.length) {
             setConnStatus("Connected, but the server returned no models. Add one manually below.", "error");
             return;
@@ -1544,6 +1735,72 @@ function saveConnectionDraft() {
     toast("Connection saved.", "success");
 }
 
+/* --- API key encryption --- */
+
+function renderEncryptionStatus() {
+    const status = $("#enc-status");
+    const enableBtn = $("#enc-enable-btn");
+    const disableBtn = $("#enc-disable-btn");
+    if (!KeyVault.supported()) {
+        status.textContent = "Key encryption is unavailable in this browser context.";
+        status.className = "conn-status";
+        enableBtn.classList.add("hidden");
+        disableBtn.classList.add("hidden");
+        return;
+    }
+    if (KeyVault.enabled()) {
+        status.textContent = KeyVault.unlocked()
+            ? "🔓 API keys are encrypted at rest (unlocked for this session)."
+            : "🔒 API keys are encrypted at rest — you'll be asked for your passphrase when they're needed.";
+        status.className = "conn-status ok";
+        enableBtn.classList.add("hidden");
+        disableBtn.classList.remove("hidden");
+    } else {
+        status.textContent = "API keys are stored unencrypted in this browser's local storage.";
+        status.className = "conn-status";
+        enableBtn.classList.remove("hidden");
+        disableBtn.classList.add("hidden");
+    }
+}
+
+async function enableEncryption() {
+    const pass = await textDialog({
+        title: "Set a Passphrase",
+        message: "Your API keys will be encrypted with this passphrase (AES-GCM, PBKDF2). You'll be asked for it once per session. If you forget it, you'll need to re-enter your keys.",
+        password: true,
+        placeholder: "Passphrase",
+        confirmLabel: "Continue",
+    });
+    if (!pass) return;
+    const confirmPass = await textDialog({
+        title: "Confirm Passphrase",
+        password: true,
+        placeholder: "Repeat passphrase",
+        confirmLabel: "Encrypt",
+    });
+    if (confirmPass === null) return;
+    if (confirmPass !== pass) {
+        toast("Passphrases don't match.", "error");
+        return;
+    }
+    await KeyVault.enable(pass);
+    await saveConnections();
+    renderEncryptionStatus();
+    toast("API keys are now encrypted at rest.", "success");
+}
+
+async function disableEncryption() {
+    if (!(await unlockVault())) return;
+    const ok = await confirmDialog("Store API keys unencrypted in this browser again?",
+        { title: "Remove Encryption", confirmLabel: "Remove", danger: true });
+    if (!ok) return;
+    KeyVault.disable();
+    connections.forEach(c => delete c.apiKeyEnc);
+    await saveConnections();
+    renderEncryptionStatus();
+    toast("Key encryption removed.", "success");
+}
+
 /* --- Data tab --- */
 
 function exportAllData() {
@@ -1572,12 +1829,17 @@ async function importData(file) {
     if (Array.isArray(data.conversations)) {
         convs = data.conversations; // v2 backup
         if (Array.isArray(data.connections) && data.connections.length) {
-            const existingIds = new Set(connections.map(c => c.id));
-            for (const conn of data.connections) {
-                if (!existingIds.has(conn.id)) connections.push(conn);
+            // Saving while locked would strip the imported plaintext keys.
+            if (KeyVault.enabled() && !KeyVault.unlocked() && !(await unlockVault())) {
+                toast("Vault locked — connections were skipped, conversations still imported.", "error");
+            } else {
+                const existingIds = new Set(connections.map(c => c.id));
+                for (const conn of data.connections) {
+                    if (!existingIds.has(conn.id)) connections.push(conn);
+                }
+                await saveConnections();
+                validateActiveModel();
             }
-            saveConnections();
-            validateActiveModel();
         }
         if (data.folders && typeof data.folders === "object") {
             folders = { ...data.folders, ...folders };
@@ -1614,7 +1876,7 @@ async function clearAllData() {
     if (!ok) return;
     await Store.clear().catch(e => console.error("Clear failed:", e));
     ["sparkSettings", "connections", "folders", "currentFolderId", "currentConversationId",
-        "conversations", "conversations_backup_v1", "models", "models_backup_v1",
+        "conversations", "conversations_backup_v1", "models", "models_backup_v1", "keyVault",
         "activeModel", "chatWidth", "chatHeight", "chatFontSize", "chatTitle"]
         .forEach(k => localStorage.removeItem(k));
     location.reload();
@@ -1814,6 +2076,9 @@ function attachEventListeners() {
     });
 
     $("#add-connection-btn").addEventListener("click", () => showConnectionEditor());
+    $("#conn-preset").addEventListener("change", (e) => applyPreset(e.target.value));
+    $("#enc-enable-btn").addEventListener("click", enableEncryption);
+    $("#enc-disable-btn").addEventListener("click", disableEncryption);
     $("#conn-test-btn").addEventListener("click", testConnection);
     $("#conn-fetch-models-btn").addEventListener("click", fetchModelsIntoDraft);
     $("#conn-save-btn").addEventListener("click", saveConnectionDraft);
@@ -1941,6 +2206,7 @@ async function init() {
     }
     renderFolderList();
     renderModelPicker();
+    populatePresetSelect();
     attachEventListeners();
     autoResizeInput();
 

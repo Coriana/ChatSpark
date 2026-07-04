@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ChatSpark</title>
+    <link rel="icon" href="files/assistant-avatar.png">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="vendor/github-dark.min.css">
 </head>
@@ -86,6 +87,11 @@
                 <button id="add-connection-btn" class="primary-btn">＋ Add Connection</button>
                 <div id="connection-editor" class="connection-editor hidden">
                     <div class="form-group">
+                        <label for="conn-preset">Provider</label>
+                        <select id="conn-preset"></select>
+                        <small id="conn-preset-help"></small>
+                    </div>
+                    <div class="form-group">
                         <label for="conn-name">Name</label>
                         <input type="text" id="conn-name" placeholder="e.g. OpenAI, Local llama.cpp">
                     </div>
@@ -97,7 +103,20 @@
                     <div class="form-group">
                         <label for="conn-key">API Key (optional)</label>
                         <input type="password" id="conn-key" placeholder="sk-…" autocomplete="off">
-                        <small class="warning-text">⚠️ Stored unencrypted in this browser's local storage.</small>
+                        <small id="conn-key-note">Stored in this browser only. Enable encryption below to protect it at rest.</small>
+                    </div>
+                    <div class="form-group form-row advanced-row">
+                        <div>
+                            <label for="conn-auth-style">Auth header</label>
+                            <select id="conn-auth-style">
+                                <option value="bearer">Authorization: Bearer</option>
+                                <option value="api-key">api-key (Azure)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="conn-query">Extra query string</label>
+                            <input type="text" id="conn-query" placeholder="e.g. api-version=2024-02-15-preview">
+                        </div>
                     </div>
                     <div class="conn-editor-buttons">
                         <button type="button" id="conn-test-btn" class="secondary-btn">Test Connection</button>
@@ -115,6 +134,14 @@
                     <div class="conn-editor-buttons">
                         <button type="button" id="conn-save-btn" class="primary-btn">Save Connection</button>
                         <button type="button" id="conn-cancel-btn" class="secondary-btn">Cancel</button>
+                    </div>
+                </div>
+                <div class="key-security">
+                    <label>API key security</label>
+                    <div id="enc-status" class="conn-status"></div>
+                    <div class="conn-editor-buttons">
+                        <button type="button" id="enc-enable-btn" class="secondary-btn">🔒 Encrypt keys with a passphrase…</button>
+                        <button type="button" id="enc-disable-btn" class="secondary-btn hidden">Remove encryption</button>
                     </div>
                 </div>
             </div>
